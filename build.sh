@@ -51,6 +51,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
+xattr -cr "$APP"
 codesign --force --sign - --identifier local.memory-pressure "$APP"
 codesign --verify --strict "$APP"
 printf 'Built: %s\n' "$APP"
