@@ -1,0 +1,6 @@
+.DS_Store
+.build/
+build/
+Previews/
+검증기록.md
+*.app/
