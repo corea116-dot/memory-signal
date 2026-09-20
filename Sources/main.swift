@@ -2,20 +2,18 @@ import AppKit
 import OSLog
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private var item: NSStatusItem?
     private var timer: Timer?
     private var source: DispatchSourceMemoryPressure?
     private let services = SystemServices()
     private var episode = AlertEpisode(notified: UserDefaults.standard.bool(forKey: "episodeNotified"))
-    private let statusRow = NSMenuItem(title: "상태 확인 중", action: nil, keyEquivalent: "")
-    private let notificationRow = NSMenuItem(title: "", action: #selector(SystemServices.notificationAction), keyEquivalent: "")
-    private let loginRow = NSMenuItem(title: "", action: #selector(SystemServices.loginAction), keyEquivalent: "")
     private let log = Logger(subsystem: "local.memory-pressure", category: "monitor")
     private var images: [Pressure: NSImage] = [:]
     private var lastPressure: Pressure?
     private var hasSample = false
     private let panel = MemoryPanel()
+    private lazy var panelController = StatusPanelController(memoryPanel: panel, services: services)
     private var history = PressureHistory()
     private var latestDirectProcesses: [ProcessMemoryEntry] = []
     private var protectedProcesses: [ProcessMemoryEntry] = []
@@ -38,21 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             images[pressure] = image
         }
         item = NSStatusBar.system.statusItem(withLength: 32)
-        let menu = NSMenu()
-        menu.delegate = self
-        let panelItem = NSMenuItem()
-        panelItem.view = panel
-        menu.addItem(panelItem)
-        menu.addItem(.separator())
-        notificationRow.target = services
-        loginRow.target = services
-        menu.addItem(notificationRow)
-        menu.addItem(loginRow)
-        menu.addItem(.separator())
-        let quit = NSMenuItem(title: "메모리 신호 종료", action: #selector(quitApp), keyEquivalent: "q")
-        quit.target = self
-        menu.addItem(quit)
-        item?.menu = menu
+        item?.button?.target = self
+        item?.button?.action = #selector(togglePanel)
         services.onChange = { [weak self] in self?.refreshMenu(); self?.sample() }
         services.start()
         sample()
@@ -86,12 +71,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item?.button?.image = images[pressure]
             item?.button?.toolTip = "메모리 압력: \(pressure.label)"
             item?.button?.setAccessibilityLabel("메모리 압력: \(pressure.label)")
-            statusRow.title = "메모리 압력: \(pressure.label)"
         } else {
             item?.button?.image = NSImage(systemSymbolName: "questionmark.circle", accessibilityDescription: "상태 확인 불가")
             item?.button?.toolTip = "메모리 압력을 읽을 수 없습니다"
             item?.button?.setAccessibilityLabel("메모리 압력: 확인 불가")
-            statusRow.title = "메모리 압력: 확인 불가"
         }
         let shouldNotify = episode.observe(pressure, canNotify: services.authorized)
         persistEpisode()
@@ -127,19 +110,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func refreshMenu() {
-        notificationRow.title = services.notificationLabel
-        loginRow.title = services.loginLabel
+        panelController.refreshActions()
     }
 
-    func menuWillOpen(_ menu: NSMenu) {
+    @objc private func togglePanel() {
         refreshMenu()
         services.refreshNotifications()
         sample()
+        guard let button = item?.button else { return }
+        panelController.toggle(relativeTo: button)
     }
 
     @objc private func woke() { sample(); services.refreshNotifications() }
-    @objc private func quitApp() { NSApp.terminate(nil) }
-
     func applicationWillTerminate(_ notification: Notification) {
         timer?.invalidate()
         source?.cancel()
