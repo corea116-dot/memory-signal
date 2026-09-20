@@ -1,6 +1,49 @@
 import AppKit
 
 @MainActor
+final class ProcessMemoryRow: NSView {
+    private let icon = NSImageView()
+    private let name = NSTextField(labelWithString: "")
+    private let value = NSTextField(labelWithString: "")
+    private var shaded = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        icon.frame = NSRect(x: 8, y: 4, width: 20, height: 20)
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        addSubview(icon)
+        name.frame = NSRect(x: 38, y: 4, width: 390, height: 20)
+        name.font = .systemFont(ofSize: 13)
+        name.lineBreakMode = .byTruncatingTail
+        addSubview(name)
+        value.frame = NSRect(x: 438, y: 4, width: 146, height: 20)
+        value.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular)
+        value.alignment = .right
+        addSubview(value)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    func update(_ entry: ProcessMemoryEntry, shaded: Bool) {
+        self.shaded = shaded
+        let app = NSRunningApplication(processIdentifier: entry.pid)
+        name.stringValue = app?.localizedName ?? entry.name
+        icon.image = app?.icon ?? entry.executablePath.map { NSWorkspace.shared.icon(forFile: $0) }
+            ?? NSImage(systemSymbolName: "memorychip", accessibilityDescription: nil)
+        value.stringValue = ProcessMemorySnapshot.format(entry.residentBytes)
+        setAccessibilityElement(true)
+        setAccessibilityLabel("\(name.stringValue), \(value.stringValue)")
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard shaded else { return }
+        NSColor.labelColor.withAlphaComponent(0.06).setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 1), xRadius: 6, yRadius: 6).fill()
+    }
+}
+
+@MainActor
 final class PressureGraph: NSView {
     var samples: [PressureSample] = []
     var now: TimeInterval = 0
@@ -44,22 +87,23 @@ final class PressureGraph: NSView {
 
 @MainActor
 final class MemoryPanel: NSView {
-    private let graph = PressureGraph(frame: NSRect(x: 16, y: 40, width: 270, height: 100))
+    private let graph = PressureGraph(frame: NSRect(x: 16, y: 314, width: 270, height: 100))
     private var values: [NSTextField] = []
+    private var processRows: [ProcessMemoryRow] = []
     private let state = NSTextField(labelWithString: "메모리 압력")
     private let freshness = NSTextField(labelWithString: "측정 대기 중")
 
     init() {
-        super.init(frame: NSRect(x: 0, y: 0, width: 620 * 2 / 3, height: 196 * 2 / 3))
-        bounds = NSRect(x: 0, y: 0, width: 620, height: 196)
-        state.frame = NSRect(x: 16, y: 154, width: 270, height: 24)
+        super.init(frame: NSRect(x: 0, y: 0, width: 620 * 2 / 3, height: 470 * 2 / 3))
+        bounds = NSRect(x: 0, y: 0, width: 620, height: 470)
+        state.frame = NSRect(x: 16, y: 428, width: 270, height: 24)
         state.alignment = .center
         state.font = .systemFont(ofSize: 14, weight: .semibold)
         addSubview(state)
         addSubview(graph)
         let labels = ["물리적 메모리:", "사용된 메모리:", "캐시된 파일:", "사용된 스왑 공간:"]
         for (index, title) in labels.enumerated() {
-            let y = 151 - CGFloat(index) * 35
+            let y = 425 - CGFloat(index) * 35
             let label = NSTextField(labelWithString: title)
             label.frame = NSRect(x: 316, y: y, width: 170, height: 22)
             label.font = .systemFont(ofSize: 15)
@@ -72,16 +116,29 @@ final class MemoryPanel: NSView {
             values.append(value)
             addSubview(value)
         }
-        freshness.frame = NSRect(x: 316, y: 17, width: 286, height: 18)
+        freshness.frame = NSRect(x: 316, y: 291, width: 286, height: 18)
         freshness.font = .systemFont(ofSize: 10)
         freshness.textColor = .secondaryLabelColor
         addSubview(freshness)
-        toolTip = "2초마다 갱신 · 그래프는 OS 압력 단계 이력입니다. 용량은 1024 기반이며 사용량·캐시는 VM 통계 추정값입니다."
+
+        let processTitle = NSTextField(labelWithString: "메모리 사용 상위 프로세스")
+        processTitle.frame = NSRect(x: 16, y: 240, width: 588, height: 22)
+        processTitle.font = .systemFont(ofSize: 13, weight: .semibold)
+        addSubview(processTitle)
+        for index in 0..<8 {
+            let row = ProcessMemoryRow(frame: NSRect(x: 10, y: 207 - CGFloat(index) * 28,
+                width: 600, height: 28))
+            row.isHidden = true
+            processRows.append(row)
+            addSubview(row)
+        }
+        toolTip = "2초마다 갱신 · 그래프는 OS 압력 단계 이력입니다. 프로세스 목록은 실제 메모리 사용량 순이며 읽기 전용입니다."
     }
 
     required init?(coder: NSCoder) { nil }
 
-    func update(snapshot: MemorySnapshot, history: PressureHistory, pressure: Pressure?) {
+    func update(snapshot: MemorySnapshot, history: PressureHistory, pressure: Pressure?,
+                processes: [ProcessMemoryEntry]) {
         let bytes = [Optional(snapshot.physical), snapshot.used, snapshot.cached, snapshot.swap]
         for (index, value) in values.enumerated() {
             value.stringValue = MemorySnapshot.format(bytes[index], smallUnits: index == 3)
@@ -93,6 +150,14 @@ final class MemoryPanel: NSView {
         graph.setAccessibilityElement(true)
         graph.setAccessibilityLabel("최근 2분 메모리 압력 단계 이력. 현재 \(pressure?.label ?? "확인 불가")")
         graph.needsDisplay = true
+        for (index, row) in processRows.enumerated() {
+            guard index < processes.count else {
+                row.isHidden = true
+                continue
+            }
+            row.isHidden = false
+            row.update(processes[index], shaded: index.isMultiple(of: 2) == false)
+        }
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -100,12 +165,14 @@ final class MemoryPanel: NSView {
         bounds.fill()
         NSColor.separatorColor.setStroke()
         let lines = NSBezierPath()
-        lines.move(to: NSPoint(x: 301, y: 15))
-        lines.line(to: NSPoint(x: 301, y: 180))
-        for y in [143, 108, 73] {
+        lines.move(to: NSPoint(x: 301, y: 289))
+        lines.line(to: NSPoint(x: 301, y: 454))
+        for y in [417, 382, 347] {
             lines.move(to: NSPoint(x: 316, y: y))
             lines.line(to: NSPoint(x: 602, y: y))
         }
+        lines.move(to: NSPoint(x: 16, y: 274))
+        lines.line(to: NSPoint(x: 604, y: 274))
         lines.lineWidth = 0.5
         lines.stroke()
     }

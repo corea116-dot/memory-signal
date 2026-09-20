@@ -68,7 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func sample() {
         let pressure = Pressure.read()
         history.append(pressure, at: ProcessInfo.processInfo.systemUptime)
-        panel.update(snapshot: MemorySnapshot.read(), history: history, pressure: pressure)
+        panel.update(snapshot: MemorySnapshot.read(), history: history, pressure: pressure,
+            processes: ProcessMemorySnapshot.read())
         if !hasSample || pressure != lastPressure {
             hasSample = true
             lastPressure = pressure

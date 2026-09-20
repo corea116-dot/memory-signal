@@ -5,12 +5,21 @@ mkdir -p build Resources
 export CLANG_MODULE_CACHE_PATH="$PWD/build/ModuleCache"
 export SWIFT_MODULECACHE_PATH="$PWD/build/ModuleCache"
 APP="$PWD/../메모리 신호.app"
+if SWIFTC="$(xcrun --find swiftc 2>/dev/null)" && SDKROOT="$(xcrun --show-sdk-path 2>/dev/null)"; then
+  :
+elif [[ -x /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc ]]; then
+  SWIFTC=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc
+  SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+else
+  printf 'Swift compiler not found. Install Xcode Command Line Tools.\n' >&2
+  exit 1
+fi
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-xcrun swiftc Tools/ExtractIcons.swift -o build/extract-icons
+"$SWIFTC" -sdk "$SDKROOT" Tools/ExtractIcons.swift -o build/extract-icons
 build/extract-icons Resources/source-icons.png Resources
-xcrun swiftc -swift-version 6 Sources/Pressure.swift Sources/MemorySnapshot.swift Tests/main.swift -o build/pressure-tests
+"$SWIFTC" -sdk "$SDKROOT" -swift-version 6 Sources/Pressure.swift Sources/MemorySnapshot.swift Sources/ProcessMemory.swift Tests/main.swift -o build/pressure-tests
 build/pressure-tests
-xcrun swiftc -swift-version 6 -O -target arm64-apple-macosx13.0 Sources/*.swift \
+"$SWIFTC" -sdk "$SDKROOT" -swift-version 6 -O -target arm64-apple-macosx13.0 Sources/*.swift \
   -o "$APP/Contents/MacOS/MemoryPressure" -framework AppKit -framework ServiceManagement -framework UserNotifications
 cp Resources/*.png "$APP/Contents/Resources/"
 ICONSET="$PWD/build/AppIcon.iconset"

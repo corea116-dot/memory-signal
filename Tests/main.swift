@@ -46,10 +46,17 @@ history.append(.critical, at: 123)
 check(history.samples.count == 2, "history retains only last 120 seconds")
 check(history.samples.first?.pressure == nil, "unknown history remains a gap")
 print("PASS: memory formatting, missing data, bounded history")
+check(ProcessMemorySnapshot.format(2_147_483_648) == "2.00GB", "process GB formatting")
+check(ProcessMemorySnapshot.format(536_870_912) == "512.0MB", "process MB formatting")
+check(ProcessMemorySnapshot.read(limit: 0).isEmpty, "zero process limit")
+print("PASS: process memory formatting and limit")
 if CommandLine.arguments.contains("--live") {
     guard let current = Pressure.read() else { fatalError("Live pressure unavailable") }
     print("LIVE pressure=\(current.rawValue) \(current.label)")
     let snapshot = MemorySnapshot.read()
     check(snapshot.used != nil && snapshot.cached != nil && snapshot.swap != nil, "live VM and swap values available")
     print("LIVE physical=\(MemorySnapshot.format(snapshot.physical)) used=\(MemorySnapshot.format(snapshot.used)) cached=\(MemorySnapshot.format(snapshot.cached)) swap=\(MemorySnapshot.format(snapshot.swap, smallUnits: true))")
+    let processes = ProcessMemorySnapshot.read()
+    check(!processes.isEmpty, "live process memory list available")
+    print("LIVE processes=" + processes.map { "\($0.name):\(ProcessMemorySnapshot.format($0.residentBytes))" }.joined(separator: ", "))
 }
