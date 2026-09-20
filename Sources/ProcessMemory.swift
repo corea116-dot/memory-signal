@@ -4,12 +4,13 @@ import Foundation
 struct ProcessMemoryEntry {
     let pid: pid_t
     let name: String
-    let residentBytes: UInt64
+    let memoryBytes: UInt64
     let executablePath: String?
 }
 
 enum ProcessMemorySnapshot {
-    static func read(limit: Int = 8) -> [ProcessMemoryEntry] {
+    static func read(limit: Int = 50) -> [ProcessMemoryEntry] {
+        guard limit > 0 else { return [] }
         let byteCount = proc_listpids(UInt32(PROC_ALL_PIDS), 0, nil, 0)
         guard byteCount > 0 else { return [] }
 
@@ -20,12 +21,16 @@ enum ProcessMemorySnapshot {
         guard usedBytes > 0 else { return [] }
 
         let count = min(pids.count, Int(usedBytes) / MemoryLayout<pid_t>.stride)
-        return pids.prefix(count).compactMap(entry(for:)).filter { $0.residentBytes > 0 }
+        return pids.prefix(count).compactMap(entry(for:)).filter { $0.memoryBytes > 0 }
             .sorted { lhs, rhs in
-                if lhs.residentBytes == rhs.residentBytes { return lhs.pid < rhs.pid }
-                return lhs.residentBytes > rhs.residentBytes
+                if lhs.memoryBytes == rhs.memoryBytes { return lhs.pid < rhs.pid }
+                return lhs.memoryBytes > rhs.memoryBytes
             }
-            .prefix(max(0, limit)).map { $0 }
+            .prefix(limit).map { $0 }
+    }
+
+    static func displayBytes(resident: UInt64?, footprint: UInt64?) -> UInt64? {
+        footprint ?? resident
     }
 
     static func format(_ bytes: UInt64) -> String {
@@ -40,7 +45,15 @@ enum ProcessMemorySnapshot {
         var taskInfo = proc_taskinfo()
         let taskInfoSize = MemoryLayout<proc_taskinfo>.size
         let readSize = proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &taskInfo, Int32(taskInfoSize))
-        guard readSize == taskInfoSize else { return nil }
+        let resident = readSize == taskInfoSize ? taskInfo.pti_resident_size : nil
+
+        var usage = rusage_info_v4()
+        let usageResult = withUnsafeMutablePointer(to: &usage) { pointer in
+            proc_pid_rusage(pid, RUSAGE_INFO_V4,
+                UnsafeMutableRawPointer(pointer).assumingMemoryBound(to: rusage_info_t?.self))
+        }
+        let footprint = usageResult == 0 ? usage.ri_phys_footprint : nil
+        guard let memoryBytes = displayBytes(resident: resident, footprint: footprint) else { return nil }
 
         var nameBuffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
         let nameLength = proc_name(pid, &nameBuffer, UInt32(nameBuffer.count))
@@ -54,6 +67,6 @@ enum ProcessMemorySnapshot {
             ? String(decoding: pathBuffer.prefix(Int(pathLength)).map(UInt8.init(bitPattern:)), as: UTF8.self)
             : nil
         return ProcessMemoryEntry(pid: pid, name: name,
-            residentBytes: taskInfo.pti_resident_size, executablePath: path)
+            memoryBytes: memoryBytes, executablePath: path)
     }
 }

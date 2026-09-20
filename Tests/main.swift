@@ -48,6 +48,8 @@ check(history.samples.first?.pressure == nil, "unknown history remains a gap")
 print("PASS: memory formatting, missing data, bounded history")
 check(ProcessMemorySnapshot.format(2_147_483_648) == "2.00GB", "process GB formatting")
 check(ProcessMemorySnapshot.format(536_870_912) == "512.0MB", "process MB formatting")
+check(ProcessMemorySnapshot.displayBytes(resident: 629_145_600, footprint: 445_644_800) == 445_644_800,
+    "process list uses Activity Monitor physical footprint instead of resident size")
 check(ProcessMemorySnapshot.read(limit: 0).isEmpty, "zero process limit")
 print("PASS: process memory formatting and limit")
 if CommandLine.arguments.contains("--live") {
@@ -58,5 +60,5 @@ if CommandLine.arguments.contains("--live") {
     print("LIVE physical=\(MemorySnapshot.format(snapshot.physical)) used=\(MemorySnapshot.format(snapshot.used)) cached=\(MemorySnapshot.format(snapshot.cached)) swap=\(MemorySnapshot.format(snapshot.swap, smallUnits: true))")
     let processes = ProcessMemorySnapshot.read()
     check(!processes.isEmpty, "live process memory list available")
-    print("LIVE processes=" + processes.map { "\($0.name):\(ProcessMemorySnapshot.format($0.residentBytes))" }.joined(separator: ", "))
+    print("LIVE processes=" + processes.map { "\($0.name):\(ProcessMemorySnapshot.format($0.memoryBytes))" }.joined(separator: ", "))
 }

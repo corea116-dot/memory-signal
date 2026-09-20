@@ -1,5 +1,9 @@
 import AppKit
 
+final class FlippedView: NSView {
+    override var isFlipped: Bool { true }
+}
+
 @MainActor
 final class ProcessMemoryRow: NSView {
     private let icon = NSImageView()
@@ -30,7 +34,7 @@ final class ProcessMemoryRow: NSView {
         name.stringValue = app?.localizedName ?? entry.name
         icon.image = app?.icon ?? entry.executablePath.map { NSWorkspace.shared.icon(forFile: $0) }
             ?? NSImage(systemSymbolName: "memorychip", accessibilityDescription: nil)
-        value.stringValue = ProcessMemorySnapshot.format(entry.residentBytes)
+        value.stringValue = ProcessMemorySnapshot.format(entry.memoryBytes)
         setAccessibilityElement(true)
         setAccessibilityLabel("\(name.stringValue), \(value.stringValue)")
         needsDisplay = true
@@ -90,6 +94,8 @@ final class MemoryPanel: NSView {
     private let graph = PressureGraph(frame: NSRect(x: 16, y: 314, width: 270, height: 100))
     private var values: [NSTextField] = []
     private var processRows: [ProcessMemoryRow] = []
+    private let processScroll = NSScrollView(frame: NSRect(x: 10, y: 10, width: 600, height: 224))
+    private let processContent = FlippedView(frame: NSRect(x: 0, y: 0, width: 580, height: 224))
     private let state = NSTextField(labelWithString: "메모리 압력")
     private let freshness = NSTextField(labelWithString: "측정 대기 중")
 
@@ -121,18 +127,18 @@ final class MemoryPanel: NSView {
         freshness.textColor = .secondaryLabelColor
         addSubview(freshness)
 
-        let processTitle = NSTextField(labelWithString: "메모리 사용 상위 프로세스")
+        let processTitle = NSTextField(labelWithString: "메모리 사용 상위 프로세스 · 스크롤")
         processTitle.frame = NSRect(x: 16, y: 240, width: 588, height: 22)
         processTitle.font = .systemFont(ofSize: 13, weight: .semibold)
         addSubview(processTitle)
-        for index in 0..<8 {
-            let row = ProcessMemoryRow(frame: NSRect(x: 10, y: 207 - CGFloat(index) * 28,
-                width: 600, height: 28))
-            row.isHidden = true
-            processRows.append(row)
-            addSubview(row)
-        }
-        toolTip = "2초마다 갱신 · 그래프는 OS 압력 단계 이력입니다. 프로세스 목록은 실제 메모리 사용량 순이며 읽기 전용입니다."
+        processScroll.drawsBackground = false
+        processScroll.borderType = .noBorder
+        processScroll.hasVerticalScroller = true
+        processScroll.scrollerStyle = .legacy
+        processScroll.autohidesScrollers = false
+        processScroll.documentView = processContent
+        addSubview(processScroll)
+        toolTip = "2초마다 갱신 · 프로세스 목록은 활성 상태 보기와 같은 메모리 풋프린트 순입니다. macOS가 보호하는 시스템 프로세스는 제외될 수 있습니다."
     }
 
     required init?(coder: NSCoder) { nil }
@@ -150,13 +156,28 @@ final class MemoryPanel: NSView {
         graph.setAccessibilityElement(true)
         graph.setAccessibilityLabel("최근 2분 메모리 압력 단계 이력. 현재 \(pressure?.label ?? "확인 불가")")
         graph.needsDisplay = true
+        let wasEmpty = processRows.isEmpty
+        let contentWidth = processScroll.contentSize.width
+        while processRows.count < processes.count {
+            let row = ProcessMemoryRow(frame: NSRect(x: 0,
+                y: CGFloat(processRows.count) * 28, width: contentWidth, height: 28))
+            processRows.append(row)
+            processContent.addSubview(row)
+        }
+        processContent.frame = NSRect(x: 0, y: 0, width: contentWidth,
+            height: max(processScroll.contentSize.height, CGFloat(processes.count) * 28))
         for (index, row) in processRows.enumerated() {
             guard index < processes.count else {
                 row.isHidden = true
                 continue
             }
             row.isHidden = false
+            row.frame = NSRect(x: 0, y: CGFloat(index) * 28, width: contentWidth, height: 28)
             row.update(processes[index], shaded: index.isMultiple(of: 2) == false)
+        }
+        if wasEmpty {
+            processScroll.contentView.scroll(to: .zero)
+            processScroll.reflectScrolledClipView(processScroll.contentView)
         }
     }
 
