@@ -17,11 +17,11 @@ final class ProcessMemoryRow: NSView {
         icon.imageScaling = .scaleProportionallyUpOrDown
         addSubview(icon)
         name.frame = NSRect(x: 38, y: 4, width: 390, height: 20)
-        name.font = .systemFont(ofSize: 13)
+        name.font = .systemFont(ofSize: 14)
         name.lineBreakMode = .byTruncatingTail
         addSubview(name)
         value.frame = NSRect(x: 438, y: 4, width: 146, height: 20)
-        value.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular)
+        value.font = .monospacedDigitSystemFont(ofSize: 14, weight: .regular)
         value.alignment = .right
         addSubview(value)
     }
@@ -104,7 +104,7 @@ final class MemoryPanel: NSView {
         bounds = NSRect(x: 0, y: 0, width: 620, height: 470)
         state.frame = NSRect(x: 16, y: 428, width: 270, height: 24)
         state.alignment = .center
-        state.font = .systemFont(ofSize: 14, weight: .semibold)
+        state.font = .systemFont(ofSize: 15, weight: .semibold)
         addSubview(state)
         addSubview(graph)
         let labels = ["물리적 메모리:", "사용된 메모리:", "캐시된 파일:", "사용된 스왑 공간:"]
@@ -112,24 +112,24 @@ final class MemoryPanel: NSView {
             let y = 425 - CGFloat(index) * 35
             let label = NSTextField(labelWithString: title)
             label.frame = NSRect(x: 316, y: y, width: 170, height: 22)
-            label.font = .systemFont(ofSize: 15)
+            label.font = .systemFont(ofSize: 16)
             addSubview(label)
             let value = NSTextField(labelWithString: "—")
             value.frame = NSRect(x: 481, y: y, width: 121, height: 22)
-            value.font = .monospacedDigitSystemFont(ofSize: 15, weight: .regular)
+            value.font = .monospacedDigitSystemFont(ofSize: 16, weight: .regular)
             value.alignment = .right
             value.setAccessibilityLabel(title)
             values.append(value)
             addSubview(value)
         }
         freshness.frame = NSRect(x: 316, y: 291, width: 286, height: 18)
-        freshness.font = .systemFont(ofSize: 10)
+        freshness.font = .systemFont(ofSize: 11)
         freshness.textColor = .secondaryLabelColor
         addSubview(freshness)
 
         let processTitle = NSTextField(labelWithString: "메모리 사용 상위 프로세스 · 스크롤")
         processTitle.frame = NSRect(x: 16, y: 240, width: 588, height: 22)
-        processTitle.font = .systemFont(ofSize: 13, weight: .semibold)
+        processTitle.font = .systemFont(ofSize: 14, weight: .semibold)
         addSubview(processTitle)
         processScroll.drawsBackground = false
         processScroll.borderType = .noBorder
