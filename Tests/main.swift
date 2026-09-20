@@ -50,6 +50,16 @@ check(ProcessMemorySnapshot.format(2_147_483_648) == "2.00GB", "process GB forma
 check(ProcessMemorySnapshot.format(536_870_912) == "512.0MB", "process MB formatting")
 check(ProcessMemorySnapshot.displayBytes(resident: 629_145_600, footprint: 445_644_800) == 445_644_800,
     "process list uses Activity Monitor physical footprint instead of resident size")
+check(ProcessMemorySnapshot.parseTopMemory("1625M") == 1_703_936_000,
+    "top fallback parses protected-process memory")
+let mergedProcesses = ProcessMemorySnapshot.merge(
+    primary: [ProcessMemoryEntry(pid: 1, name: "Primary", memoryBytes: 200, executablePath: nil)],
+    fallback: [
+        ProcessMemoryEntry(pid: 1, name: "Fallback duplicate", memoryBytes: 300, executablePath: nil),
+        ProcessMemoryEntry(pid: 169, name: "WindowServer", memoryBytes: 400, executablePath: nil)
+    ], limit: 50)
+check(mergedProcesses.map(\.pid) == [169, 1], "protected-process fallback is merged without replacing direct values")
+check(mergedProcesses.last?.memoryBytes == 200, "direct footprint wins over fallback estimate")
 check(ProcessMemorySnapshot.read(limit: 0).isEmpty, "zero process limit")
 print("PASS: process memory formatting and limit")
 if CommandLine.arguments.contains("--live") {
@@ -60,5 +70,9 @@ if CommandLine.arguments.contains("--live") {
     print("LIVE physical=\(MemorySnapshot.format(snapshot.physical)) used=\(MemorySnapshot.format(snapshot.used)) cached=\(MemorySnapshot.format(snapshot.cached)) swap=\(MemorySnapshot.format(snapshot.swap, smallUnits: true))")
     let processes = ProcessMemorySnapshot.read()
     check(!processes.isEmpty, "live process memory list available")
-    print("LIVE processes=" + processes.map { "\($0.name):\(ProcessMemorySnapshot.format($0.memoryBytes))" }.joined(separator: ", "))
+    let fallback = ProcessMemorySnapshot.readProtectedFallback()
+    check(fallback.contains { $0.name == "WindowServer" }, "protected WindowServer fallback available")
+    let merged = ProcessMemorySnapshot.merge(primary: processes, fallback: fallback, limit: 50)
+    check(merged.contains { $0.name == "WindowServer" }, "merged process list includes WindowServer")
+    print("LIVE processes=" + merged.map { "\($0.name):\(ProcessMemorySnapshot.format($0.memoryBytes))" }.joined(separator: ", "))
 }

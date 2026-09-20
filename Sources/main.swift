@@ -17,6 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var hasSample = false
     private let panel = MemoryPanel()
     private var history = PressureHistory()
+    private var latestDirectProcesses: [ProcessMemoryEntry] = []
+    private var protectedProcesses: [ProcessMemoryEntry] = []
+    private var protectedRefreshTask: Task<Void, Never>?
+    private var lastProtectedRefresh = -Double.infinity
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -68,8 +72,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func sample() {
         let pressure = Pressure.read()
         history.append(pressure, at: ProcessInfo.processInfo.systemUptime)
+        latestDirectProcesses = ProcessMemorySnapshot.read()
         panel.update(snapshot: MemorySnapshot.read(), history: history, pressure: pressure,
-            processes: ProcessMemorySnapshot.read())
+            processes: ProcessMemorySnapshot.merge(
+                primary: latestDirectProcesses, fallback: protectedProcesses, limit: 50))
+        refreshProtectedProcessesIfNeeded()
         if !hasSample || pressure != lastPressure {
             hasSample = true
             lastPressure = pressure
@@ -103,6 +110,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    private func refreshProtectedProcessesIfNeeded() {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard protectedRefreshTask == nil, now - lastProtectedRefresh >= 10 else { return }
+        protectedRefreshTask = Task { [weak self] in
+            let fallback = await Task.detached(priority: .utility) {
+                ProcessMemorySnapshot.readProtectedFallback()
+            }.value
+            guard !Task.isCancelled, let self else { return }
+            protectedProcesses = fallback
+            lastProtectedRefresh = ProcessInfo.processInfo.systemUptime
+            protectedRefreshTask = nil
+            panel.updateProcesses(ProcessMemorySnapshot.merge(
+                primary: latestDirectProcesses, fallback: protectedProcesses, limit: 50))
+        }
+    }
+
     private func refreshMenu() {
         notificationRow.title = services.notificationLabel
         loginRow.title = services.loginLabel
@@ -120,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         timer?.invalidate()
         source?.cancel()
+        protectedRefreshTask?.cancel()
     }
 }
 

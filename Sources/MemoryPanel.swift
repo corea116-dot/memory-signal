@@ -138,7 +138,7 @@ final class MemoryPanel: NSView {
         processScroll.autohidesScrollers = false
         processScroll.documentView = processContent
         addSubview(processScroll)
-        toolTip = "2초마다 갱신 · 프로세스 목록은 활성 상태 보기와 같은 메모리 풋프린트 순입니다. macOS가 보호하는 시스템 프로세스는 제외될 수 있습니다."
+        toolTip = "2초마다 갱신 · 직접 읽을 수 있는 프로세스는 메모리 풋프린트, macOS가 보호하는 시스템 프로세스는 top 추정값입니다."
     }
 
     required init?(coder: NSCoder) { nil }
@@ -156,6 +156,10 @@ final class MemoryPanel: NSView {
         graph.setAccessibilityElement(true)
         graph.setAccessibilityLabel("최근 2분 메모리 압력 단계 이력. 현재 \(pressure?.label ?? "확인 불가")")
         graph.needsDisplay = true
+        updateProcesses(processes)
+    }
+
+    func updateProcesses(_ processes: [ProcessMemoryEntry]) {
         let wasEmpty = processRows.isEmpty
         let contentWidth = processScroll.contentSize.width
         while processRows.count < processes.count {
