@@ -1,5 +1,9 @@
 import AppKit
 
+private enum PanelTypography {
+    static let menuEquivalentSize: CGFloat = 19.5
+}
+
 final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
@@ -16,12 +20,12 @@ final class ProcessMemoryRow: NSView {
         icon.frame = NSRect(x: 8, y: 4, width: 20, height: 20)
         icon.imageScaling = .scaleProportionallyUpOrDown
         addSubview(icon)
-        name.frame = NSRect(x: 38, y: 4, width: 390, height: 20)
-        name.font = .systemFont(ofSize: 14)
+        name.frame = NSRect(x: 38, y: 2, width: 390, height: 24)
+        name.font = .systemFont(ofSize: PanelTypography.menuEquivalentSize)
         name.lineBreakMode = .byTruncatingTail
         addSubview(name)
-        value.frame = NSRect(x: 438, y: 4, width: 146, height: 20)
-        value.font = .monospacedDigitSystemFont(ofSize: 14, weight: .regular)
+        value.frame = NSRect(x: 438, y: 2, width: 146, height: 24)
+        value.font = .monospacedDigitSystemFont(ofSize: PanelTypography.menuEquivalentSize, weight: .regular)
         value.alignment = .right
         addSubview(value)
     }
@@ -102,21 +106,21 @@ final class MemoryPanel: NSView {
     init() {
         super.init(frame: NSRect(x: 0, y: 0, width: 620 * 2 / 3, height: 470 * 2 / 3))
         bounds = NSRect(x: 0, y: 0, width: 620, height: 470)
-        state.frame = NSRect(x: 16, y: 428, width: 270, height: 24)
+        state.frame = NSRect(x: 16, y: 426, width: 270, height: 28)
         state.alignment = .center
-        state.font = .systemFont(ofSize: 15, weight: .semibold)
+        state.font = .systemFont(ofSize: PanelTypography.menuEquivalentSize, weight: .semibold)
         addSubview(state)
         addSubview(graph)
         let labels = ["물리적 메모리:", "사용된 메모리:", "캐시된 파일:", "사용된 스왑 공간:"]
         for (index, title) in labels.enumerated() {
             let y = 425 - CGFloat(index) * 35
             let label = NSTextField(labelWithString: title)
-            label.frame = NSRect(x: 316, y: y, width: 170, height: 22)
-            label.font = .systemFont(ofSize: 16)
+            label.frame = NSRect(x: 316, y: y - 2, width: 170, height: 26)
+            label.font = .systemFont(ofSize: PanelTypography.menuEquivalentSize)
             addSubview(label)
             let value = NSTextField(labelWithString: "—")
-            value.frame = NSRect(x: 481, y: y, width: 121, height: 22)
-            value.font = .monospacedDigitSystemFont(ofSize: 16, weight: .regular)
+            value.frame = NSRect(x: 481, y: y - 2, width: 121, height: 26)
+            value.font = .monospacedDigitSystemFont(ofSize: PanelTypography.menuEquivalentSize, weight: .regular)
             value.alignment = .right
             value.setAccessibilityLabel(title)
             values.append(value)
@@ -128,8 +132,8 @@ final class MemoryPanel: NSView {
         addSubview(freshness)
 
         let processTitle = NSTextField(labelWithString: "메모리 사용 상위 프로세스 · 스크롤")
-        processTitle.frame = NSRect(x: 16, y: 240, width: 588, height: 22)
-        processTitle.font = .systemFont(ofSize: 14, weight: .semibold)
+        processTitle.frame = NSRect(x: 16, y: 238, width: 588, height: 26)
+        processTitle.font = .systemFont(ofSize: PanelTypography.menuEquivalentSize, weight: .semibold)
         addSubview(processTitle)
         processScroll.drawsBackground = false
         processScroll.borderType = .noBorder
